@@ -1,0 +1,15 @@
+Builds
+cmake-build
+build
+CMakeLists.txt.user
+*.qmlc
+*.kdev4
+
+# QtCreator project files
+jucy.cflags
+jucy.config
+jucy.creator
+jucy.creator.user
+jucy.cxxflags
+jucy.files
+jucy.includes
