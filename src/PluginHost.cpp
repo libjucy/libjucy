@@ -63,20 +63,75 @@ bool PluginHost::loadPlugin(QString pluginIdentifier)
 
 QString PluginHost::getPluginName()
 {
-    return QString::fromStdString(d->m_plugin.get()->getName().toStdString());
+    if (d->m_plugin != nullptr) {
+        return QString::fromStdString(d->m_plugin.get()->getName().toStdString());
+    } else {
+        return "";
+    }
 }
 
 QString PluginHost::getPluginIdentifier()
 {
-    return QString::fromStdString(d->m_plugin.get()->getPluginDescription().fileOrIdentifier.toStdString());
+    if (d->m_plugin != nullptr) {
+        return QString::fromStdString(d->m_plugin.get()->getPluginDescription().fileOrIdentifier.toStdString());
+    } else {
+        return "";
+    }
 }
 
 QStringList PluginHost::listPluginParameters()
 {
     QStringList parameterNames;
-    for (auto *param : d->m_plugin.get()->getParameters()) {
-        parameterNames << QString::fromStdString(param->getName(INT_MAX).toStdString());
+    if (d->m_plugin != nullptr) {
+        for (auto *param : d->m_plugin.get()->getParameters()) {
+            parameterNames << QString::fromStdString(param->getName(INT_MAX).toStdString());
+        }
     }
-
     return parameterNames;
+}
+
+QStringList PluginHost::getAllProgramNames()
+{
+    QStringList programNames;
+    if (d->m_plugin != nullptr) {
+        for (int programIndex = 0; programIndex < d->m_plugin.get()->getNumPrograms(); ++programIndex) {
+            programNames << QString::fromStdString(d->m_plugin.get()->getProgramName(programIndex).toStdString());
+        }
+    }
+    return programNames;
+}
+
+QString PluginHost::getCurrentProgramName()
+{
+    if (d->m_plugin != nullptr) {
+        return QString::fromStdString(d->m_plugin.get()->getProgramName(d->m_plugin.get()->getCurrentProgram()).toStdString());
+    } else {
+        return "";
+    }
+}
+
+int PluginHost::getCurrentProgramIndex() {
+    if (d->m_plugin != nullptr) {
+        return d->m_plugin.get()->getCurrentProgram();
+    } else {
+        return -1;
+    }
+}
+
+bool PluginHost::setCurrentProgramIndex(int programIndex)
+{
+    bool result = false;
+    if (d->m_plugin != nullptr) {
+        if (programIndex >= 0 && programIndex < d->m_plugin.get()->getNumPrograms()) {
+            d->m_plugin.get()->setCurrentProgram(programIndex);
+            if (d->m_plugin.get()->getCurrentProgram() == programIndex) {
+                result = true;
+            } else {
+                qDebug() << "Error changing program index to" << programIndex;
+            }
+        } else {
+            qDebug() << "programIndex is out of range. Enter a value between 0 -" << d->m_plugin.get()->getNumPrograms();
+        }
+    }
+    return result;
 }
