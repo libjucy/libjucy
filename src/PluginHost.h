@@ -1,7 +1,6 @@
 #pragma once
-#define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 
-#include "JUCEHeaders.h"
+#include "JuceHeaders.h"
 #include <QtCore>
 
 class PluginHostPrivate;
@@ -11,6 +10,11 @@ class PluginHost : public QObject {
 public:
     explicit PluginHost(QObject *parent = nullptr);
     ~PluginHost();
+
+    Q_INVOKABLE bool loadPlugin(QString pluginIdentifier);
+    Q_INVOKABLE QString getPluginName();
+    Q_INVOKABLE QString getPluginIdentifier();
+    Q_INVOKABLE QStringList listPluginParameters();
 private:
     PluginHostPrivate *d{nullptr};
 };
