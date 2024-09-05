@@ -2,6 +2,9 @@
 #include "PluginHost.h"
 #include <QtCore>
 #include <QDebug>
+#include <jack/jack.h>
+
+static int jackProcessCallback(jack_nframes_t nframes, void* arg);
 
 class PluginHostPrivate {
 public:
@@ -9,6 +12,12 @@ public:
 
     PluginHost *q{nullptr};
     std::unique_ptr<juce::AudioPluginInstance> m_plugin{nullptr};
+    QString m_jackClientName{"jucy-pluginhost"};
+    jack_client_t *m_jackClient{nullptr};
+    jack_port_t *m_jackClientAudioInLeftPort{nullptr};
+    jack_port_t *m_jackClientAudioInRightPort{nullptr};
+    jack_port_t *m_jackClientAudioOutLeftPort{nullptr};
+    jack_port_t *m_jackClientAudioOutRightPort{nullptr};
 
     bool loadPlugin(QString pluginIdentifier) {
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
@@ -28,21 +37,55 @@ public:
         kpl.scanAndAddDragAndDroppedFiles(audioPluginFormatManager, juce::StringArray(pluginIdentifier.toStdString()), discoveredPlugins);
         // check if the requested plugin was found
         if (discoveredPlugins.isEmpty()) {
-            qDebug() << "Invalid plugin identifier :" << pluginIdentifier;
+            qCritical() << "Invalid plugin identifier :" << pluginIdentifier;
         } else {
             pluginDescription = *discoveredPlugins[0];
             m_plugin = audioPluginFormatManager.createPluginInstance(pluginDescription, 48000, 1024, err);
             if (!m_plugin) {
-                qDebug() << "Error creating plugin instance :" << QString::fromStdString(err.toStdString());
+                qCritical() << "Error creating plugin instance :" << QString::fromStdString(err.toStdString());
             } else {
-                qDebug() << "Plugin instantiated :" << pluginIdentifier;
-                result = true;
+                qInfo() << "Plugin instantiated :" << pluginIdentifier;
+                jack_status_t jackStatus{};
+                m_jackClient = jack_client_open(m_jackClientName.toUtf8(), JackNullOption, &jackStatus);
+                if (m_jackClient != nullptr) {
+                    if (jack_set_process_callback(m_jackClient, jackProcessCallback, this) == 0) {
+                        if (jack_activate(m_jackClient) == 0) {
+                            qInfo() << "Jack client creation successful";
+                            m_jackClientAudioInLeftPort = jack_port_register(m_jackClient, QString("audio_in_left").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+                            m_jackClientAudioInRightPort = jack_port_register(m_jackClient, QString("audio_in_right").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+                            m_jackClientAudioOutLeftPort = jack_port_register(m_jackClient, QString("audio_out_left").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+                            m_jackClientAudioOutRightPort = jack_port_register(m_jackClient, QString("audio_out_right").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+
+                            if (m_jackClientAudioInLeftPort == nullptr || m_jackClientAudioInRightPort == nullptr || m_jackClientAudioOutLeftPort == nullptr || m_jackClientAudioOutRightPort == nullptr) {
+                                qCritical() << "Error registering ports for client" << m_jackClientName;
+                            } else {
+                                qInfo() << "Port registration successful for client" << m_jackClientName;
+                                result = true;
+                            }
+                        } else {
+                            qCritical() << "Error activating jack client" << m_jackClientName;
+                        }
+                    } else {
+                        qCritical() << "Error setting jack process callback for client" << m_jackClientName;
+                    }
+                } else {
+                    qCritical() << "Error creating jack client" << m_jackClientName;
+                }
             }
         }
 
         return result;
     }
+
+    int pluginProcessCallback(jack_nframes_t nframes) {
+        return 0;
+    }
 };
+
+static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
+    PluginHostPrivate *obj = static_cast<PluginHostPrivate*>(arg);
+    return obj->pluginProcessCallback(nframes);
+}
 
 PluginHost::PluginHost(QObject *parent)
     : QObject(parent)
@@ -64,7 +107,7 @@ bool PluginHost::loadPlugin(QString pluginIdentifier)
 QString PluginHost::getPluginName()
 {
     if (d->m_plugin != nullptr) {
-        return QString::fromStdString(d->m_plugin.get()->getName().toStdString());
+        return QString::fromStdString(d->m_plugin->getName().toStdString());
     } else {
         return "";
     }
@@ -73,17 +116,18 @@ QString PluginHost::getPluginName()
 QString PluginHost::getPluginIdentifier()
 {
     if (d->m_plugin != nullptr) {
-        return QString::fromStdString(d->m_plugin.get()->getPluginDescription().fileOrIdentifier.toStdString());
+        return QString::fromStdString(d->m_plugin->getPluginDescription().fileOrIdentifier.toStdString());
     } else {
         return "";
     }
 }
 
-QStringList PluginHost::listPluginParameters()
+QStringList PluginHost::getAllParameterNames()
 {
     QStringList parameterNames;
     if (d->m_plugin != nullptr) {
-        for (auto *param : d->m_plugin.get()->getParameters()) {
+        d->m_plugin->refreshParameterList();
+        for (auto *param : d->m_plugin->getParameters()) {
             parameterNames << QString::fromStdString(param->getName(INT_MAX).toStdString());
         }
     }
@@ -94,8 +138,8 @@ QStringList PluginHost::getAllProgramNames()
 {
     QStringList programNames;
     if (d->m_plugin != nullptr) {
-        for (int programIndex = 0; programIndex < d->m_plugin.get()->getNumPrograms(); ++programIndex) {
-            programNames << QString::fromStdString(d->m_plugin.get()->getProgramName(programIndex).toStdString());
+        for (int programIndex = 0; programIndex < d->m_plugin->getNumPrograms(); ++programIndex) {
+            programNames << QString::fromStdString(d->m_plugin->getProgramName(programIndex).toStdString());
         }
     }
     return programNames;
@@ -104,7 +148,7 @@ QStringList PluginHost::getAllProgramNames()
 QString PluginHost::getCurrentProgramName()
 {
     if (d->m_plugin != nullptr) {
-        return QString::fromStdString(d->m_plugin.get()->getProgramName(d->m_plugin.get()->getCurrentProgram()).toStdString());
+        return QString::fromStdString(d->m_plugin->getProgramName(d->m_plugin->getCurrentProgram()).toStdString());
     } else {
         return "";
     }
@@ -112,25 +156,40 @@ QString PluginHost::getCurrentProgramName()
 
 int PluginHost::getCurrentProgramIndex() {
     if (d->m_plugin != nullptr) {
-        return d->m_plugin.get()->getCurrentProgram();
+        return d->m_plugin->getCurrentProgram();
     } else {
         return -1;
     }
 }
 
-bool PluginHost::setCurrentProgramIndex(int programIndex)
+bool PluginHost::setCurrentProgram(int programIndex)
 {
     bool result = false;
     if (d->m_plugin != nullptr) {
-        if (programIndex >= 0 && programIndex < d->m_plugin.get()->getNumPrograms()) {
-            d->m_plugin.get()->setCurrentProgram(programIndex);
-            if (d->m_plugin.get()->getCurrentProgram() == programIndex) {
+        if (programIndex >= 0 && programIndex < d->m_plugin->getNumPrograms()) {
+            d->m_plugin->setCurrentProgram(programIndex);
+            if (d->m_plugin->getCurrentProgram() == programIndex) {
                 result = true;
             } else {
-                qDebug() << "Error changing program index to" << programIndex;
+                qWarning() << "Error changing program index to" << programIndex;
             }
         } else {
-            qDebug() << "programIndex is out of range. Enter a value between 0 -" << d->m_plugin.get()->getNumPrograms();
+            qWarning() << "programIndex is out of range. Enter a value between 0 -" << d->m_plugin->getNumPrograms();
+        }
+    }
+    return result;
+}
+
+bool PluginHost::setCurrentProgram(QString programName)
+{
+    bool result = false;
+    if (d->m_plugin != nullptr) {
+        const QStringList allProgramNames = getAllProgramNames();
+        const int programIndex = allProgramNames.indexOf(programName);
+        if (programIndex != -1) {
+            result = setCurrentProgram(programIndex);
+        } else {
+            qWarning() << "Cannot find program" << programName;
         }
     }
     return result;
