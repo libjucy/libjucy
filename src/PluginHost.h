@@ -16,15 +16,12 @@ public:
     Q_INVOKABLE bool unloadPlugin();
     Q_INVOKABLE QString getPluginName();
     Q_INVOKABLE QString getPluginIdentifier();
-    Q_INVOKABLE QStringList getAllParameterNames();
-    Q_INVOKABLE QString getParameterValueByIndex(int parameterIndex);
-    Q_INVOKABLE QString getParameterValueByName(QString parameterName);
-    Q_INVOKABLE void setParameterValueRaw(int parameterIndex, float value);
-    Q_INVOKABLE QStringList getAllPresetNames();
-    Q_INVOKABLE int getCurrentPresetIndex();
-    Q_INVOKABLE QString getCurrentPresetName();
-    Q_INVOKABLE bool setCurrentPresetByIndex(int presetIndex);
-    Q_INVOKABLE bool setCurrentPresetByName(QString presetName);
+    Q_INVOKABLE QStringList getAllParameters();
+    Q_INVOKABLE float getParameterValue(QString parameterName);
+    Q_INVOKABLE bool setParameterValue(QString parameterName, float value);
+    Q_INVOKABLE QStringList getAllPresets();
+    Q_INVOKABLE QString getCurrentPreset();
+    Q_INVOKABLE bool setCurrentPreset(QString presetName);
 
     Q_INVOKABLE virtual bool loadPlugin() = 0;
 private:

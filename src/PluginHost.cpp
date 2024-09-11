@@ -107,6 +107,19 @@ public:
         return result;
     }
 
+    juce::AudioProcessorParameter *findParameterByName(QString parameterName) {
+        juce::AudioProcessorParameter *result{nullptr};
+        if (m_plugin != nullptr) {
+            for (auto *param : m_plugin->getParameters()) {
+                if (param->getName(INT_MAX).toStdString() == parameterName.toStdString()) {
+                    result = param;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
     int pluginProcessCallback(jack_nframes_t nframes) {
         if (m_plugin != nullptr) {
             jack_default_audio_sample_t *audioInLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInLeftPort, nframes));
@@ -178,7 +191,7 @@ QString PluginHost::getPluginIdentifier()
     return d->m_pluginIdentifier;
 }
 
-QStringList PluginHost::getAllParameterNames()
+QStringList PluginHost::getAllParameters()
 {
     QStringList parameterNames;
     if (d->m_plugin != nullptr) {
@@ -190,29 +203,28 @@ QStringList PluginHost::getAllParameterNames()
     return parameterNames;
 }
 
-QString PluginHost::getParameterValueByIndex(int parameterIndex)
+float PluginHost::getParameterValue(QString parameterName)
 {
-    return QString::fromStdString(d->m_plugin->getParameters()[parameterIndex]->getCurrentValueAsText().toStdString());
-}
-
-QString PluginHost::getParameterValueByName(QString parameterName)
-{
-    QString result="";
-    for (auto *param : d->m_plugin->getParameters()) {
-        if (param->getName(INT_MAX).toStdString() == parameterName.toStdString()) {
-            result = QString::fromStdString(param->getCurrentValueAsText().toStdString());
-            break;
-        }
+    float result = 0.0f;
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        result = param->getValue();
     }
     return result;
 }
 
-void PluginHost::setParameterValueRaw(int parameterIndex, float value)
+bool PluginHost::setParameterValue(QString parameterName, float value)
 {
-    d->m_plugin->getParameters()[parameterIndex]->setValue(value);
+    bool result = false;
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        param->setValue(value);
+        result = true;
+    }
+    return result;
 }
 
-QStringList PluginHost::getAllPresetNames()
+QStringList PluginHost::getAllPresets()
 {
     QStringList presetNames;
     if (d->m_plugin != nullptr) {
@@ -223,15 +235,7 @@ QStringList PluginHost::getAllPresetNames()
     return presetNames;
 }
 
-int PluginHost::getCurrentPresetIndex() {
-    if (d->m_plugin != nullptr) {
-        return d->m_plugin->getCurrentProgram();
-    } else {
-        return -1;
-    }
-}
-
-QString PluginHost::getCurrentPresetName()
+QString PluginHost::getCurrentPreset()
 {
     if (d->m_plugin != nullptr) {
         return QString::fromStdString(d->m_plugin->getProgramName(d->m_plugin->getCurrentProgram()).toStdString());
@@ -240,32 +244,19 @@ QString PluginHost::getCurrentPresetName()
     }
 }
 
-bool PluginHost::setCurrentPresetByIndex(int presetIndex)
+bool PluginHost::setCurrentPreset(QString presetName)
 {
     bool result = false;
     if (d->m_plugin != nullptr) {
-        if (presetIndex >= 0 && presetIndex < d->m_plugin->getNumPrograms()) {
+        const QStringList allPresetNames = getAllPresets();
+        const int presetIndex = allPresetNames.indexOf(presetName);
+        if (presetIndex != -1) {
             d->m_plugin->setCurrentProgram(presetIndex);
             if (d->m_plugin->getCurrentProgram() == presetIndex) {
                 result = true;
             } else {
-                qWarning() << "Error changing preset index to" << presetIndex;
+                qWarning() << "Error changing preset to" << presetName;
             }
-        } else {
-            qWarning() << "presetIndex is out of range. Enter a value between 0 -" << d->m_plugin->getNumPrograms();
-        }
-    }
-    return result;
-}
-
-bool PluginHost::setCurrentPresetByName(QString presetName)
-{
-    bool result = false;
-    if (d->m_plugin != nullptr) {
-        const QStringList allPresetNames = getAllPresetNames();
-        const int presetIndex = allPresetNames.indexOf(presetName);
-        if (presetIndex != -1) {
-            result = setCurrentPresetByIndex(presetIndex);
         } else {
             qWarning() << "Cannot find preset" << presetName;
         }
