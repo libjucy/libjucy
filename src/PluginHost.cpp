@@ -224,6 +224,48 @@ bool PluginHost::setParameterValue(QString parameterName, float value)
     return result;
 }
 
+QStringList PluginHost::getParameterValueStrings(QString parameterName)
+{
+    QStringList result;
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        for (auto value : param->getAllValueStrings()) {
+            result << QString::fromStdString(value.toStdString());
+        }
+    }
+    return result;
+}
+
+int PluginHost::getParameterNumSteps(QString parameterName)
+{
+    int result = 0;
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        result = param->getNumSteps();
+    }
+    return result;
+}
+
+float PluginHost::getParameterValueForText(QString parameterName, QString valueString)
+{
+    float result = 0.0f;
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        result = param->getValueForText(juce::String(valueString.toStdString()));
+    }
+    return result;
+}
+
+QString PluginHost::getParameterTextForValue(QString parameterName, float value)
+{
+    QString result = "";
+    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
+    if (param != nullptr) {
+        result = QString::fromStdString(param->getText(value, INT_MAX).toStdString());
+    }
+    return result;
+}
+
 QStringList PluginHost::getAllPresets()
 {
     QStringList presetNames;

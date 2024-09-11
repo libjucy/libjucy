@@ -19,6 +19,10 @@ public:
     Q_INVOKABLE QStringList getAllParameters();
     Q_INVOKABLE float getParameterValue(QString parameterName);
     Q_INVOKABLE bool setParameterValue(QString parameterName, float value);
+    Q_INVOKABLE QStringList getParameterValueStrings(QString parameterName);
+    Q_INVOKABLE int getParameterNumSteps(QString parameterName);
+    Q_INVOKABLE float getParameterValueForText(QString parameterName, QString valueString);
+    Q_INVOKABLE QString getParameterTextForValue(QString parameterName, float value);
     Q_INVOKABLE QStringList getAllPresets();
     Q_INVOKABLE QString getCurrentPreset();
     Q_INVOKABLE bool setCurrentPreset(QString presetName);
