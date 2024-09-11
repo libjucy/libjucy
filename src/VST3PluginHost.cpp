@@ -2,12 +2,13 @@
 
 VST3PluginHost::VST3PluginHost(QString pluginIdentifier, QObject *parent)
     : PluginHost(pluginIdentifier, parent)
-{}
+    , m_audioPluginFormatManager(new juce::AudioPluginFormatManager())
+{
+    juce::VST3PluginFormat *vst3PluginFormat = new juce::VST3PluginFormat();
+    m_audioPluginFormatManager->addFormat(vst3PluginFormat);
+}
 
 bool VST3PluginHost::loadPlugin()
 {
-    juce::VST3PluginFormat *vst3PluginFormat = new juce::VST3PluginFormat();
-    juce::AudioPluginFormatManager *pluginFormatManager = new juce::AudioPluginFormatManager();
-    pluginFormatManager->addFormat(vst3PluginFormat);
-    return PluginHost::loadPlugin(pluginFormatManager);
+    return PluginHost::loadPlugin(m_audioPluginFormatManager);
 }
