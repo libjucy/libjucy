@@ -8,41 +8,36 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg);
 
 class PluginHostPrivate {
 public:
-    PluginHostPrivate(PluginHost *pluginHost)
+    PluginHostPrivate(PluginHost *pluginHost, QString pluginIdentifier)
         : q(pluginHost)
-        , juceEventLoop(new JuceEventLoop())
+        , m_pluginIdentifier(pluginIdentifier)
     {
-        juceEventLoop->start();
+        if (!PluginHostPrivate::juceEventLoop->isThreadRunning()) {
+            PluginHostPrivate::juceEventLoop->start();
+        }
     }
 
+    static JuceEventLoop *juceEventLoop;
     PluginHost *q{nullptr};
-    std::unique_ptr<juce::AudioPluginInstance> m_plugin{nullptr};
+    QString m_pluginIdentifier;
     QString m_jackClientName{"jucy-pluginhost"};
+    std::unique_ptr<juce::AudioPluginInstance> m_plugin{nullptr};
     jack_client_t *m_jackClient{nullptr};
     jack_port_t *m_jackClientAudioInLeftPort{nullptr};
     jack_port_t *m_jackClientAudioInRightPort{nullptr};
     jack_port_t *m_jackClientMidiInPort{nullptr};
     jack_port_t *m_jackClientAudioOutLeftPort{nullptr};
-    jack_port_t *m_jackClientAudioOutRightPort{nullptr};
+    jack_port_t *m_jackClientAudioOutRightPort{nullptr};    
 
-    bool loadPlugin(QString pluginIdentifier) {
+    bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager) {
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
         juce::PluginDescription pluginDescription;
         juce::String err;
-        juce::LV2PluginFormat *lv2PluginFormat = new juce::LV2PluginFormat();
-        juce::VST3PluginFormat *vst3PluginFormat = new juce::VST3PluginFormat();
-        juce::AudioPluginFormatManager audioPluginFormatManager;
         juce::KnownPluginList kpl;
-        const char *LV2_PATH = std::getenv("LV2_PATH");
         bool result = false;
 
-        if (LV2_PATH != nullptr) {
-            lv2PluginFormat->searchPathsForPlugins(juce::FileSearchPath(juce::String(LV2_PATH)), false);
-        }
-        audioPluginFormatManager.addFormat(lv2PluginFormat);
-        audioPluginFormatManager.addFormat(vst3PluginFormat);
         // parse the plugin path into a PluginDescription instance
-        kpl.scanAndAddDragAndDroppedFiles(audioPluginFormatManager, juce::StringArray(pluginIdentifier.toStdString()), discoveredPlugins);
+        kpl.scanAndAddDragAndDroppedFiles(*pluginFormatManager, juce::StringArray(m_pluginIdentifier.toStdString()), discoveredPlugins);
         // check if the requested plugin was found
         if (!discoveredPlugins.isEmpty()) {
             jack_status_t jackStatus{};
@@ -63,9 +58,9 @@ public:
                     ) {
                         qInfo() << "Port registration successful for client" << m_jackClientName;
                         pluginDescription = *discoveredPlugins[0];
-                        m_plugin = audioPluginFormatManager.createPluginInstance(pluginDescription, jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)), err);
+                        m_plugin = pluginFormatManager->createPluginInstance(pluginDescription, jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)), err);
                         if (m_plugin != nullptr) {
-                            qInfo() << "Plugin instantiated :" << pluginIdentifier;
+                            qInfo() << "Plugin instantiated :" << m_pluginIdentifier;
                             m_plugin->enableAllBuses();
                             m_plugin->prepareToPlay(jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)));
                             if (jack_activate(m_jackClient) == 0) {
@@ -87,9 +82,28 @@ public:
                 qCritical() << "Error creating jack client" << m_jackClientName;
             }
         } else {
-            qCritical() << "Invalid plugin identifier :" << pluginIdentifier;
+            qCritical() << "Invalid plugin identifier :" << m_pluginIdentifier;
         }
 
+        return result;
+    }
+
+    bool unloadPlugin() {
+        bool result=false;
+        if (m_jackClient != nullptr) {
+            jack_deactivate(m_jackClient);
+            jack_client_close(m_jackClient);
+            m_jackClient = nullptr;
+        } else {
+            qWarning() << "Jack client not active";
+        }
+        if (m_plugin != nullptr) {
+            m_plugin->releaseResources();
+            m_plugin.reset();
+            result=true;
+        } else {
+            qWarning() << "Plugin not instantiated";
+        }
         return result;
     }
 
@@ -121,30 +135,33 @@ public:
         }
         return 0;
     }
-private:
-    JuceEventLoop *juceEventLoop{nullptr};
 };
+JuceEventLoop *PluginHostPrivate::juceEventLoop = new JuceEventLoop();
 
 static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     PluginHostPrivate *obj = static_cast<PluginHostPrivate*>(arg);
     return obj->pluginProcessCallback(nframes);
 }
 
-PluginHost::PluginHost(QObject *parent)
+PluginHost::PluginHost(QString pluginIdentifier, QObject *parent)
     : QObject(parent)
-    , d(new PluginHostPrivate(this))
-{
-
-}
+    , d(new PluginHostPrivate(this, pluginIdentifier))
+{}
 
 PluginHost::~PluginHost()
 {
+    unloadPlugin();
     delete d;
 }
 
-bool PluginHost::loadPlugin(QString pluginIdentifier)
+bool PluginHost::loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager)
 {
-    return d->loadPlugin(pluginIdentifier);
+    return d->loadPlugin(pluginFormatManager);
+}
+
+bool PluginHost::unloadPlugin()
+{
+    return d->unloadPlugin();
 }
 
 QString PluginHost::getPluginName()
@@ -158,11 +175,7 @@ QString PluginHost::getPluginName()
 
 QString PluginHost::getPluginIdentifier()
 {
-    if (d->m_plugin != nullptr) {
-        return QString::fromStdString(d->m_plugin->getPluginDescription().fileOrIdentifier.toStdString());
-    } else {
-        return "";
-    }
+    return d->m_pluginIdentifier;
 }
 
 QStringList PluginHost::getAllParameterNames()
@@ -177,12 +190,12 @@ QStringList PluginHost::getAllParameterNames()
     return parameterNames;
 }
 
-QString PluginHost::getParameterValue(int parameterIndex)
+QString PluginHost::getParameterValueByIndex(int parameterIndex)
 {
     return QString::fromStdString(d->m_plugin->getParameters()[parameterIndex]->getCurrentValueAsText().toStdString());
 }
 
-QString PluginHost::getParameterValue(QString parameterName)
+QString PluginHost::getParameterValueByName(QString parameterName)
 {
     QString result="";
     for (auto *param : d->m_plugin->getParameters()) {
@@ -194,23 +207,31 @@ QString PluginHost::getParameterValue(QString parameterName)
     return result;
 }
 
-void PluginHost::setParameterValue(int parameterIndex, float value)
+void PluginHost::setParameterValueRaw(int parameterIndex, float value)
 {
     d->m_plugin->getParameters()[parameterIndex]->setValue(value);
 }
 
-QStringList PluginHost::getAllProgramNames()
+QStringList PluginHost::getAllPresetNames()
 {
-    QStringList programNames;
+    QStringList presetNames;
     if (d->m_plugin != nullptr) {
-        for (int programIndex = 0; programIndex < d->m_plugin->getNumPrograms(); ++programIndex) {
-            programNames << QString::fromStdString(d->m_plugin->getProgramName(programIndex).toStdString());
+        for (int presetIndex = 0; presetIndex < d->m_plugin->getNumPrograms(); ++presetIndex) {
+            presetNames << QString::fromStdString(d->m_plugin->getProgramName(presetIndex).toStdString());
         }
     }
-    return programNames;
+    return presetNames;
 }
 
-QString PluginHost::getCurrentProgramName()
+int PluginHost::getCurrentPresetIndex() {
+    if (d->m_plugin != nullptr) {
+        return d->m_plugin->getCurrentProgram();
+    } else {
+        return -1;
+    }
+}
+
+QString PluginHost::getCurrentPresetName()
 {
     if (d->m_plugin != nullptr) {
         return QString::fromStdString(d->m_plugin->getProgramName(d->m_plugin->getCurrentProgram()).toStdString());
@@ -219,42 +240,34 @@ QString PluginHost::getCurrentProgramName()
     }
 }
 
-int PluginHost::getCurrentProgramIndex() {
-    if (d->m_plugin != nullptr) {
-        return d->m_plugin->getCurrentProgram();
-    } else {
-        return -1;
-    }
-}
-
-bool PluginHost::setCurrentProgram(int programIndex)
+bool PluginHost::setCurrentPresetByIndex(int presetIndex)
 {
     bool result = false;
     if (d->m_plugin != nullptr) {
-        if (programIndex >= 0 && programIndex < d->m_plugin->getNumPrograms()) {
-            d->m_plugin->setCurrentProgram(programIndex);
-            if (d->m_plugin->getCurrentProgram() == programIndex) {
+        if (presetIndex >= 0 && presetIndex < d->m_plugin->getNumPrograms()) {
+            d->m_plugin->setCurrentProgram(presetIndex);
+            if (d->m_plugin->getCurrentProgram() == presetIndex) {
                 result = true;
             } else {
-                qWarning() << "Error changing program index to" << programIndex;
+                qWarning() << "Error changing preset index to" << presetIndex;
             }
         } else {
-            qWarning() << "programIndex is out of range. Enter a value between 0 -" << d->m_plugin->getNumPrograms();
+            qWarning() << "presetIndex is out of range. Enter a value between 0 -" << d->m_plugin->getNumPrograms();
         }
     }
     return result;
 }
 
-bool PluginHost::setCurrentProgram(QString programName)
+bool PluginHost::setCurrentPresetByName(QString presetName)
 {
     bool result = false;
     if (d->m_plugin != nullptr) {
-        const QStringList allProgramNames = getAllProgramNames();
-        const int programIndex = allProgramNames.indexOf(programName);
-        if (programIndex != -1) {
-            result = setCurrentProgram(programIndex);
+        const QStringList allPresetNames = getAllPresetNames();
+        const int presetIndex = allPresetNames.indexOf(presetName);
+        if (presetIndex != -1) {
+            result = setCurrentPresetByIndex(presetIndex);
         } else {
-            qWarning() << "Cannot find program" << programName;
+            qWarning() << "Cannot find preset" << presetName;
         }
     }
     return result;

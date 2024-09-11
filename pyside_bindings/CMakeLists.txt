@@ -3,6 +3,8 @@ set(bindings_header ${CMAKE_CURRENT_SOURCE_DIR}/bindings.h)
 set(bindings_typesystem ${CMAKE_CURRENT_SOURCE_DIR}/bindings.xml)
 set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/pluginhost_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/lv2pluginhost_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/vst3pluginhost_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jucy_module_wrapper.cpp
 )
 

@@ -5,6 +5,8 @@ add_library(jucy SHARED)
 target_sources(jucy
     PRIVATE
         PluginHost.cpp
+        LV2PluginHost.cpp
+        VST3PluginHost.cpp
 )
 target_compile_definitions(jucy
     PUBLIC
@@ -44,8 +46,6 @@ target_link_libraries(jucy
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
         Qt5::Core
-        Qt5::Gui
-        Qt5::Quick
 )
 
 target_include_directories(jucy
