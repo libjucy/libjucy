@@ -1,4 +1,6 @@
 #include "PluginHost.h"
+#include "StringParameter.h"
+#include "BooleanParameter.h"
 #include <QtCore>
 #include <QDebug>
 #include <jack/jack.h>
@@ -107,19 +109,6 @@ public:
         return result;
     }
 
-    juce::AudioProcessorParameter *findParameterByName(QString parameterName) {
-        juce::AudioProcessorParameter *result{nullptr};
-        if (m_plugin != nullptr) {
-            for (auto *param : m_plugin->getParameters()) {
-                if (param->getName(INT_MAX).toStdString() == parameterName.toStdString()) {
-                    result = param;
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-
     int pluginProcessCallback(jack_nframes_t nframes) {
         if (m_plugin != nullptr) {
             jack_default_audio_sample_t *audioInLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInLeftPort, nframes));
@@ -191,79 +180,28 @@ QString PluginHost::getPluginIdentifier()
     return d->m_pluginIdentifier;
 }
 
-QStringList PluginHost::getAllParameters()
+QList<Parameter *> PluginHost::getAllParameters()
 {
-    QStringList parameterNames;
+    QList<Parameter *> parameters;
     if (d->m_plugin != nullptr) {
         d->m_plugin->refreshParameterList();
-        for (auto *param : d->m_plugin->getParameters()) {
-            parameterNames << QString::fromStdString(param->getName(INT_MAX).toStdString());
+        for (auto *juceParameter : d->m_plugin->getParameters()) {
+            if (juceParameter->getAllValueStrings().size() > 0) {
+                // Test for String Parameter
+                StringParameter *parameter = new StringParameter(juceParameter, this);
+                parameters << parameter;
+            } else if (juceParameter->getNumSteps() == 2) {
+                // Test for boolean parameter
+                BooleanParameter *parameter = new BooleanParameter(juceParameter, this);
+                parameters << parameter;
+            } else {
+                // If all tests fails, make it a generic parameter
+                Parameter *parameter = new Parameter(juceParameter, this);
+                parameters << parameter;
+            }
         }
     }
-    return parameterNames;
-}
-
-float PluginHost::getParameterValue(QString parameterName)
-{
-    float result = 0.0f;
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        result = param->getValue();
-    }
-    return result;
-}
-
-bool PluginHost::setParameterValue(QString parameterName, float value)
-{
-    bool result = false;
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        param->setValue(value);
-        result = true;
-    }
-    return result;
-}
-
-QStringList PluginHost::getParameterValueStrings(QString parameterName)
-{
-    QStringList result;
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        for (auto value : param->getAllValueStrings()) {
-            result << QString::fromStdString(value.toStdString());
-        }
-    }
-    return result;
-}
-
-int PluginHost::getParameterNumSteps(QString parameterName)
-{
-    int result = 0;
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        result = param->getNumSteps();
-    }
-    return result;
-}
-
-float PluginHost::getParameterValueForText(QString parameterName, QString valueString)
-{
-    float result = 0.0f;
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        result = param->getValueForText(juce::String(valueString.toStdString()));
-    }
-    return result;
-}
-
-QString PluginHost::getParameterTextForValue(QString parameterName, float value)
-{
-    QString result = "";
-    juce::AudioProcessorParameter *param = d->findParameterByName(parameterName);
-    if (param != nullptr) {
-        result = QString::fromStdString(param->getText(value, INT_MAX).toStdString());
-    }
-    return result;
+    return parameters;
 }
 
 QStringList PluginHost::getAllPresets()
