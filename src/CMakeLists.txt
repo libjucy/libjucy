@@ -7,6 +7,9 @@ target_sources(jucy
         PluginHost.cpp
         LV2PluginHost.cpp
         VST3PluginHost.cpp
+        Parameter.cpp
+        StringParameter.cpp
+        BooleanParameter.cpp
 )
 target_compile_definitions(jucy
     PUBLIC

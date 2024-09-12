@@ -8,4 +8,10 @@
     </object-type>
     <object-type name="LV2PluginHost">
     </object-type>
+    <object-type name="Parameter">
+    </object-type>
+    <object-type name="StringParameter">
+    </object-type>
+    <object-type name="BooleanParameter">
+    </object-type>
 </typesystem>
