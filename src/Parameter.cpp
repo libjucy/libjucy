@@ -52,13 +52,13 @@ bool Parameter::isString()
 void Parameter::increase()
 {
     if (m_juceParameter != nullptr) {
-        m_juceParameter->setValue(qBound(0.0f, getValue() + 1.0f/numSteps(), 1.0f));
+        m_juceParameter->setValue(qBound(0.0, getValue() + 1.0/(numSteps() - 1), 1.0));
     }
 }
 
 void Parameter::decrease()
 {
     if (m_juceParameter != nullptr) {
-        m_juceParameter->setValue(qBound(0.0f, getValue() - 1.0f/numSteps(), 1.0f));
+        m_juceParameter->setValue(qBound(0.0, getValue() - 1.0/(numSteps() - 1), 1.0));
     }
 }
