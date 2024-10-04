@@ -1,7 +1,7 @@
 #include "LV2PluginHost.h"
 
-LV2PluginHost::LV2PluginHost(QString pluginIdentifier, QObject *parent)
-    : PluginHost(pluginIdentifier, parent)
+LV2PluginHost::LV2PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent)
+    : PluginHost(pluginIdentifier, jackClientName, parent)
     , m_audioPluginFormatManager(new juce::AudioPluginFormatManager())
 {
     juce::LV2PluginFormat *lv2PluginFormat = new juce::LV2PluginFormat();
@@ -15,4 +15,11 @@ LV2PluginHost::LV2PluginHost(QString pluginIdentifier, QObject *parent)
 bool LV2PluginHost::loadPlugin()
 {
     return PluginHost::loadPlugin(m_audioPluginFormatManager);
+}
+
+QList<PluginDescription*> LV2PluginHost::getAllPlugins()
+{
+    juce::KnownPluginList kpl;
+    QList<PluginDescription*> result;
+    return result;
 }

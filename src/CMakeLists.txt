@@ -10,6 +10,7 @@ target_sources(jucy
         Parameter.cpp
         StringParameter.cpp
         BooleanParameter.cpp
+        PluginDescription.h
 )
 target_compile_definitions(jucy
     PUBLIC

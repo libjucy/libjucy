@@ -3,6 +3,7 @@
 #include "JuceHeaders.h"
 #include "JuceEventLoop.h"
 #include "Parameter.h"
+#include "PluginDescription.h"
 #include <QtCore>
 
 class PluginHostPrivate;
@@ -10,7 +11,7 @@ class PluginHostPrivate;
 class PluginHost : public QObject {
     Q_OBJECT
 public:
-    explicit PluginHost(QString pluginIdentifier, QObject *parent = nullptr);
+    explicit PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent = nullptr);
     ~PluginHost();
 
     Q_INVOKABLE bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager);
@@ -23,6 +24,7 @@ public:
     Q_INVOKABLE bool setCurrentPreset(QString presetName);
 
     Q_INVOKABLE virtual bool loadPlugin() = 0;
+    Q_INVOKABLE virtual QList<PluginDescription*> getAllPlugins() = 0;
 private:
     PluginHostPrivate *d{nullptr};
 };

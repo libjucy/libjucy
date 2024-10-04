@@ -10,26 +10,30 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg);
 
 class PluginHostPrivate {
 public:
-    PluginHostPrivate(PluginHost *pluginHost, QString pluginIdentifier)
+    PluginHostPrivate(PluginHost *pluginHost, QString pluginIdentifier, QString jackClientName)
         : q(pluginHost)
         , m_pluginIdentifier(pluginIdentifier)
+        , m_jackClientName(jackClientName)
+        , m_midiBuffer(new juce::MidiBuffer())
     {
         if (!PluginHostPrivate::juceEventLoop->isThreadRunning()) {
             PluginHostPrivate::juceEventLoop->start();
         }
+        m_midiBuffer->ensureSize(2048);
     }
 
     static JuceEventLoop *juceEventLoop;
     PluginHost *q{nullptr};
     QString m_pluginIdentifier;
-    QString m_jackClientName{"jucy-pluginhost"};
+    QString m_jackClientName;
     std::unique_ptr<juce::AudioPluginInstance> m_plugin{nullptr};
     jack_client_t *m_jackClient{nullptr};
     jack_port_t *m_jackClientAudioInLeftPort{nullptr};
     jack_port_t *m_jackClientAudioInRightPort{nullptr};
     jack_port_t *m_jackClientMidiInPort{nullptr};
     jack_port_t *m_jackClientAudioOutLeftPort{nullptr};
-    jack_port_t *m_jackClientAudioOutRightPort{nullptr};    
+    jack_port_t *m_jackClientAudioOutRightPort{nullptr};
+    juce::MidiBuffer *m_midiBuffer{nullptr};
 
     bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager) {
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
@@ -117,19 +121,19 @@ public:
             jack_default_audio_sample_t *audioOutRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutRightPort, nframes));
             jack_default_audio_sample_t *inputBuffers[2]{audioInLeftBuffer, audioInRightBuffer};
             juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
-            juce::MidiBuffer midiBuffer;
+            // m_midiBuffer->clear();
             // void *midiInBuffer = jack_port_get_buffer(m_jackClientMidiInPort, nframes);
-            // for (int midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInBuffer); ++midiEventIndex) {
-            //     // juce::MidiMessage midiMessage = juce::MidiMessage(
+            // for (uint32_t midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInBuffer); ++midiEventIndex) {
             //     jack_midi_event_t *midiEvent;
-            //     if (jack_midi_event_get(midiEvent, midiBuffer, midiEventIndex) == 0) {
-            //         midiBuffer.addEvent(juce::MidiMessage(midiEvent->buffer, midiEvent->size), midiEventIndex);
+            //     if (jack_midi_event_get(midiEvent, midiInBuffer, midiEventIndex) == 0) {
+            //         qDebug() << "Adding midi event at index" << midiEventIndex << "data" << midiEvent->buffer;
+            //         m_midiBuffer->addEvent(juce::MidiMessage(midiEvent->buffer, midiEvent->size), midiEventIndex);
             //     } else {
             //         qWarning() << "Error geting midi event data from buffer";
             //     }
             // }
 
-            m_plugin->processBlock(audioBuffer, midiBuffer);
+            m_plugin->processBlock(audioBuffer, *m_midiBuffer);
             auto *outLeftBuffer = audioBuffer.getReadPointer(0);
             auto *outRightBuffer = audioBuffer.getReadPointer(1);
             memcpy(audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
@@ -145,9 +149,9 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     return obj->pluginProcessCallback(nframes);
 }
 
-PluginHost::PluginHost(QString pluginIdentifier, QObject *parent)
+PluginHost::PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent)
     : QObject(parent)
-    , d(new PluginHostPrivate(this, pluginIdentifier))
+    , d(new PluginHostPrivate(this, pluginIdentifier, jackClientName))
 {}
 
 PluginHost::~PluginHost()

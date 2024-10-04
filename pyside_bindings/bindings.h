@@ -6,3 +6,4 @@
 #include <Parameter.h>
 #include <StringParameter.h>
 #include <BooleanParameter.h>
+#include <PluginDescription.h>
