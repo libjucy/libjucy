@@ -14,6 +14,17 @@ QString StringParameter::getValueString()
     return result;
 }
 
+QList<float> StringParameter::getAllValues()
+{
+    QList<float> result;
+
+    result << 0.0f;
+    for (int i = 0; i < numSteps() - 1; i++) {
+        result << result.at(result.size() - 1) + 1.0/(numSteps() - 1);
+    }
+    return result;
+}
+
 QStringList StringParameter::getAllValueStrings()
 {
     QStringList result;

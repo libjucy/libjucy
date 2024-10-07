@@ -9,6 +9,7 @@ class StringParameter : public Parameter {
 public:
     explicit StringParameter(juce::AudioProcessorParameter *juceParameter, QObject *parent = nullptr);
     QString getValueString();
+    QList<float> getAllValues();
     QStringList getAllValueStrings();
     bool isBoolean() override;
     bool isString() override;
