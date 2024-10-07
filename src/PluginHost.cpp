@@ -184,6 +184,17 @@ QString PluginHost::getPluginIdentifier()
     return d->m_pluginIdentifier;
 }
 
+Parameter *PluginHost::getParameter(QString parameterName)
+{
+    Parameter *result = nullptr;
+    for (auto parameter : getAllParameters()) {
+        if (parameter->getName() == parameterName) {
+            result = parameter;
+        }
+    }
+    return result;
+}
+
 QList<Parameter *> PluginHost::getAllParameters()
 {
     QList<Parameter *> parameters;

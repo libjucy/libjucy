@@ -18,6 +18,7 @@ public:
     Q_INVOKABLE bool unloadPlugin();
     Q_INVOKABLE QString getPluginName();
     Q_INVOKABLE QString getPluginIdentifier();
+    Q_INVOKABLE Parameter* getParameter(QString parameterName);
     Q_INVOKABLE QList<Parameter *> getAllParameters();
     Q_INVOKABLE QStringList getAllPresets();
     Q_INVOKABLE QString getCurrentPreset();
