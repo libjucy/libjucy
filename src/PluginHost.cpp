@@ -15,14 +15,11 @@ public:
         , m_pluginIdentifier(pluginIdentifier)
         , m_jackClientName(jackClientName)
         , m_midiBuffer(new juce::MidiBuffer())
+        , m_juceEventLoop(new JuceEventLoop())
     {
-        if (!PluginHostPrivate::juceEventLoop->isThreadRunning()) {
-            PluginHostPrivate::juceEventLoop->start();
-        }
         m_midiBuffer->ensureSize(2048);
     }
 
-    static JuceEventLoop *juceEventLoop;
     PluginHost *q{nullptr};
     QString m_pluginIdentifier;
     QString m_jackClientName;
@@ -34,6 +31,7 @@ public:
     jack_port_t *m_jackClientAudioOutLeftPort{nullptr};
     jack_port_t *m_jackClientAudioOutRightPort{nullptr};
     juce::MidiBuffer *m_midiBuffer{nullptr};
+    JuceEventLoop *m_juceEventLoop{nullptr};
 
     bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager) {
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
@@ -67,6 +65,10 @@ public:
                         m_plugin = pluginFormatManager->createPluginInstance(pluginDescription, jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)), err);
                         if (m_plugin != nullptr) {
                             qInfo() << "Plugin instantiated :" << m_pluginIdentifier;
+                            if (!m_juceEventLoop->isThreadRunning()) {
+                                qDebug() << "Starting Juce Event loop";
+                                m_juceEventLoop->start();
+                            }
                             m_plugin->enableAllBuses();
                             m_plugin->prepareToPlay(jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)));
                             if (jack_activate(m_jackClient) == 0) {
@@ -110,6 +112,10 @@ public:
         } else {
             qWarning() << "Plugin not instantiated";
         }
+        if (m_juceEventLoop->isThreadRunning()) {
+            qDebug() << "Stopping Juce Event loop";
+            m_juceEventLoop->stop();
+        }
         return result;
     }
 
@@ -142,7 +148,6 @@ public:
         return 0;
     }
 };
-JuceEventLoop *PluginHostPrivate::juceEventLoop = new JuceEventLoop();
 
 static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     PluginHostPrivate *obj = static_cast<PluginHostPrivate*>(arg);
