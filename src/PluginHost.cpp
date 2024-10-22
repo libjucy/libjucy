@@ -98,6 +98,10 @@ public:
 
     bool unloadPlugin() {
         bool result=false;
+        if (m_juceEventLoop->isThreadRunning()) {
+            qDebug() << "Stopping Juce Event loop";
+            m_juceEventLoop->stop();
+        }
         if (m_jackClient != nullptr) {
             jack_deactivate(m_jackClient);
             jack_client_close(m_jackClient);
@@ -111,10 +115,6 @@ public:
             result=true;
         } else {
             qWarning() << "Plugin not instantiated";
-        }
-        if (m_juceEventLoop->isThreadRunning()) {
-            qDebug() << "Stopping Juce Event loop";
-            m_juceEventLoop->stop();
         }
         return result;
     }
