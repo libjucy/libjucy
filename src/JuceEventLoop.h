@@ -14,6 +14,7 @@ public:
     }
 
     void stop() {
+        juce::MessageManager::getInstance()->stopDispatchLoop();
         stopThread(500);
     }
 
