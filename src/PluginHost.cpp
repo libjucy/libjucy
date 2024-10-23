@@ -30,58 +30,85 @@ public:
     jack_port_t *m_jackClientMidiInPort{nullptr};
     jack_port_t *m_jackClientAudioOutLeftPort{nullptr};
     jack_port_t *m_jackClientAudioOutRightPort{nullptr};
+    jack_default_audio_sample_t *m_audioInLeftBuffer;
+    jack_default_audio_sample_t *m_audioInRightBuffer;
+    jack_default_audio_sample_t *m_audioOutLeftBuffer;
+    jack_default_audio_sample_t *m_audioOutRightBuffer;
+
     juce::MidiBuffer *m_midiBuffer{nullptr};
     JuceEventLoop *m_juceEventLoop{nullptr};
+    bool m_pluginInstantiated{false};
 
     bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager) {
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
         juce::PluginDescription pluginDescription;
         juce::String err;
         juce::KnownPluginList kpl;
+        jack_status_t jackStatus{};
         bool result = false;
 
         // parse the plugin path into a PluginDescription instance
         kpl.scanAndAddDragAndDroppedFiles(*pluginFormatManager, juce::StringArray(m_pluginIdentifier.toStdString()), discoveredPlugins);
         // check if the requested plugin was found
         if (!discoveredPlugins.isEmpty()) {
-            jack_status_t jackStatus{};
             m_jackClient = jack_client_open(m_jackClientName.toUtf8(), JackNullOption, &jackStatus);
             if (m_jackClient != nullptr) {
+                qInfo() << "Jack client creation successful";
                 if (jack_set_process_callback(m_jackClient, jackProcessCallback, this) == 0) {
-                    m_jackClientAudioInLeftPort = jack_port_register(m_jackClient, QString("audio_in_1").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-                    m_jackClientAudioInRightPort = jack_port_register(m_jackClient, QString("audio_in_2").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-                    m_jackClientMidiInPort = jack_port_register(m_jackClient, QString("midi_in").toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-                    m_jackClientAudioOutLeftPort = jack_port_register(m_jackClient, QString("audio_out_1").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-                    m_jackClientAudioOutRightPort = jack_port_register(m_jackClient, QString("audio_out_2").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-
-                    if (m_jackClientAudioInLeftPort != nullptr &&
-                        m_jackClientAudioInRightPort != nullptr &&
-                        m_jackClientMidiInPort != nullptr &&
-                        m_jackClientAudioOutLeftPort != nullptr &&
-                        m_jackClientAudioOutRightPort != nullptr
-                    ) {
-                        qInfo() << "Port registration successful for client" << m_jackClientName;
+                    if (jack_activate(m_jackClient) == 0) {
                         pluginDescription = *discoveredPlugins[0];
                         m_plugin = pluginFormatManager->createPluginInstance(pluginDescription, jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)), err);
                         if (m_plugin != nullptr) {
                             qInfo() << "Plugin instantiated :" << m_pluginIdentifier;
-                            if (!m_juceEventLoop->isThreadRunning()) {
-                                qDebug() << "Starting Juce Event loop";
-                                m_juceEventLoop->start();
-                            }
                             m_plugin->enableAllBuses();
-                            m_plugin->prepareToPlay(jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)));
-                            if (jack_activate(m_jackClient) == 0) {
-                                qInfo() << "Jack client creation successful";
+                            if (m_plugin->getNumInputChannels() > 0) {
+                                // Register left audio input port if there are atleast 1 input port
+                                qInfo() << "Registering left audio input port";
+                                m_jackClientAudioInLeftPort = jack_port_register(m_jackClient, QString("audio_in_1").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+                            }
+                            if (m_plugin->getNumInputChannels() > 1) {
+                                // Register right audio input port if there are atleast 2 input ports
+                                qInfo() << "Registering right audio input port";
+                                m_jackClientAudioInRightPort = jack_port_register(m_jackClient, QString("audio_in_2").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+                            }
+                            if (m_plugin->acceptsMidi()) {
+                                // Register midi input port if applicable
+                                qInfo() << "Registering midi input port";
+                                m_jackClientMidiInPort = jack_port_register(m_jackClient, QString("midi_in").toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+                            }
+                            if (m_plugin->getNumOutputChannels() > 0) {
+                                // Register left audio output port if there are atleast 1 output port
+                                qInfo() << "Registering left audio output port";
+                                m_jackClientAudioOutLeftPort = jack_port_register(m_jackClient, QString("audio_out_1").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+                            }
+                            if (m_plugin->getNumOutputChannels() > 1) {
+                                // Register right audio output port if there are atleast 2 output ports
+                                qInfo() << "Registering right audio output port";
+                                m_jackClientAudioOutRightPort = jack_port_register(m_jackClient, QString("audio_out_2").toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+                            }
+                            // TODO : Handle plugins having >2 ports
+
+                            if (m_jackClientAudioInLeftPort != nullptr ||
+                                m_jackClientAudioInRightPort != nullptr ||
+                                m_jackClientMidiInPort != nullptr ||
+                                m_jackClientAudioOutLeftPort != nullptr ||
+                                m_jackClientAudioOutRightPort != nullptr
+                                ) {
+                                qInfo() << "Port registration successful for client" << m_jackClientName;
+                                if (!m_juceEventLoop->isThreadRunning()) {
+                                    m_juceEventLoop->start();
+                                }
+                                m_plugin->prepareToPlay(jack_get_sample_rate(m_jackClient), static_cast<int>(jack_get_buffer_size(m_jackClient)));
+                                m_pluginInstantiated = true;
                                 result = true;
                             } else {
-                                qCritical() << "Error activating jack client" << m_jackClientName;
+                                qCritical() << "Error registering ports for client" << m_jackClientName;
                             }
                         } else {
                             qCritical() << "Error creating plugin instance :" << QString::fromStdString(err.toStdString());
                         }
                     } else {
-                        qCritical() << "Error registering ports for client" << m_jackClientName;
+                        qCritical() << "Error activating jack client" << m_jackClientName;
                     }
                 } else {
                     qCritical() << "Error setting jack process callback for client" << m_jackClientName;
@@ -99,51 +126,66 @@ public:
     bool unloadPlugin() {
         bool result=false;
         if (m_juceEventLoop->isThreadRunning()) {
-            qDebug() << "Stopping Juce Event loop";
             m_juceEventLoop->stop();
         }
         if (m_jackClient != nullptr) {
             jack_deactivate(m_jackClient);
             jack_client_close(m_jackClient);
             m_jackClient = nullptr;
-        } else {
-            qWarning() << "Jack client not active";
         }
         if (m_plugin != nullptr) {
             m_plugin->releaseResources();
             m_plugin.reset();
+            m_pluginInstantiated = false;
             result=true;
-        } else {
-            qWarning() << "Plugin not instantiated";
         }
         return result;
     }
 
     int pluginProcessCallback(jack_nframes_t nframes) {
-        if (m_plugin != nullptr) {
-            jack_default_audio_sample_t *audioInLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInLeftPort, nframes));
-            jack_default_audio_sample_t *audioInRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInRightPort, nframes));
-            jack_default_audio_sample_t *audioOutLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutLeftPort, nframes));
-            jack_default_audio_sample_t *audioOutRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutRightPort, nframes));
-            jack_default_audio_sample_t *inputBuffers[2]{audioInLeftBuffer, audioInRightBuffer};
-            juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
-            // m_midiBuffer->clear();
-            // void *midiInBuffer = jack_port_get_buffer(m_jackClientMidiInPort, nframes);
-            // for (uint32_t midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInBuffer); ++midiEventIndex) {
-            //     jack_midi_event_t *midiEvent;
-            //     if (jack_midi_event_get(midiEvent, midiInBuffer, midiEventIndex) == 0) {
-            //         qDebug() << "Adding midi event at index" << midiEventIndex << "data" << midiEvent->buffer;
-            //         m_midiBuffer->addEvent(juce::MidiMessage(midiEvent->buffer, midiEvent->size), midiEventIndex);
-            //     } else {
-            //         qWarning() << "Error geting midi event data from buffer";
+        if (m_plugin != nullptr && m_pluginInstantiated) {
+            if (m_plugin->getNumInputChannels() > 0) {
+                m_audioInLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInLeftPort, nframes));
+            }
+            if (m_plugin->getNumInputChannels() > 1) {
+                m_audioInRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioInRightPort, nframes));
+            }
+            if (m_plugin->getNumOutputChannels() > 0) {
+                m_audioOutLeftBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutLeftPort, nframes));
+            }
+            if (m_plugin->getNumOutputChannels() > 1) {
+                m_audioOutRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutRightPort, nframes));
+            }
+            // if (m_plugin->acceptsMidi() && m_jackClientMidiInPort != nullptr) {
+            //     jack_midi_event_t midiEvent;
+            //     m_midiBuffer->clear();
+            //     void *midiInBuffer = jack_port_get_buffer(m_jackClientMidiInPort, nframes);
+            //     qDebug() << "MIDI Event Count :" << jack_midi_get_event_count(midiInBuffer);
+            //     for (jack_nframes_t midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInBuffer); ++midiEventIndex) {
+            //         if (jack_midi_event_get(&midiEvent, midiInBuffer, midiEventIndex) == 0) {
+            //             qDebug() << "Adding midi event at index" << midiEventIndex << "data" << midiEvent.buffer;
+            //             m_midiBuffer->addEvent(juce::MidiMessage(midiEvent.buffer, midiEvent.size), midiEventIndex);
+            //         } else {
+            //             qWarning() << "Error getting midi event data from buffer";
+            //         }
             //     }
             // }
-
-            m_plugin->processBlock(audioBuffer, *m_midiBuffer);
-            auto *outLeftBuffer = audioBuffer.getReadPointer(0);
-            auto *outRightBuffer = audioBuffer.getReadPointer(1);
-            memcpy(audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-            memcpy(audioOutRightBuffer, outRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+            if (m_plugin->getNumInputChannels() == 1) {
+                jack_default_audio_sample_t *inputBuffers[1]{m_audioInLeftBuffer};
+                juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 1, static_cast<int>(nframes));
+                m_plugin->processBlock(audioBuffer, *m_midiBuffer);
+                auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+            }
+            if (m_plugin->getNumInputChannels() > 1) {
+                jack_default_audio_sample_t *inputBuffers[2]{m_audioInLeftBuffer, m_audioInRightBuffer};
+                juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
+                m_plugin->processBlock(audioBuffer, *m_midiBuffer);
+                auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                auto *outRightBuffer = audioBuffer.getReadPointer(1);
+                memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                memcpy(m_audioOutRightBuffer, outRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+            }
         }
         return 0;
     }
