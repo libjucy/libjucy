@@ -38,6 +38,8 @@ public:
     jack_midi_event_t m_midiEvent;
     JuceEventLoop *m_juceEventLoop{nullptr};
     bool m_pluginInstantiated{false};
+    jack_nframes_t m_jackSampleRate;
+    int m_jackBufferSize;
     int m_pluginNumInputPorts;
     int m_pluginNumOutputPorts;
     bool m_pluginAcceptsMidi;
@@ -58,18 +60,16 @@ public:
             if (m_jackClient != nullptr) {
                 qInfo() << "Jack client creation successful";
                 if (jack_set_process_callback(m_jackClient, jackProcessCallback, this) == 0) {
-                    jack_nframes_t sampleRate;
-                    int bufferSize;
                     if (jack_activate(m_jackClient) == 0) {
                         // Activate jack client temporarily to retrieve sampleRate and bufferSize
-                        sampleRate = jack_get_sample_rate(m_jackClient);
-                        bufferSize = static_cast<int>(jack_get_buffer_size(m_jackClient));
+                        m_jackSampleRate = jack_get_sample_rate(m_jackClient);
+                        m_jackBufferSize = static_cast<int>(jack_get_buffer_size(m_jackClient));
                         jack_deactivate(m_jackClient);
                     } else {
                         qCritical() << "Error activating jack client" << m_jackClientName;
                     }
                     pluginDescription = *discoveredPlugins[0];
-                    m_plugin = pluginFormatManager->createPluginInstance(pluginDescription, sampleRate, bufferSize, err);
+                    m_plugin = pluginFormatManager->createPluginInstance(pluginDescription, m_jackSampleRate, m_jackBufferSize, err);
                     if (m_plugin != nullptr) {
                         qInfo() << "Plugin instantiated :" << m_pluginIdentifier;
                         m_plugin->enableAllBuses();
@@ -114,7 +114,7 @@ public:
                                 if (!m_juceEventLoop->isThreadRunning()) {
                                     m_juceEventLoop->start();
                                 }
-                                m_plugin->prepareToPlay(sampleRate, bufferSize);
+                                m_plugin->prepareToPlay(m_jackSampleRate, m_jackBufferSize);
                                 m_pluginInstantiated = true;
                                 result = true;
                             } else {
@@ -173,35 +173,61 @@ public:
                 m_audioOutRightBuffer = static_cast<jack_default_audio_sample_t*>(jack_port_get_buffer(m_jackClientAudioOutRightPort, nframes));
             }
             if (m_pluginAcceptsMidi && m_jackClientMidiInPort != nullptr) {
-                // m_juceMidiBuffer->clear();
-                // void *midiInputPortBuffer = jack_port_get_buffer(m_jackClientMidiInPort, nframes);
-                // for (jack_nframes_t midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInputPortBuffer); ++midiEventIndex) {
-                //     if (jack_midi_event_get(&m_midiEvent, midiInputPortBuffer, midiEventIndex) == 0) {
-                //         juce::MidiMessage midiMessage = juce::MidiMessage(m_midiEvent.buffer, m_midiEvent.size);
-                //         if (midiMessage.isNoteOnOrOff()) {
-                //             qDebug() << "Adding midi event at index" << midiEventIndex << "data" << m_midiEvent.buffer;
-                //             m_juceMidiBuffer->addEvent(midiMessage, midiEventIndex);
-                //         }
-                //     } else {
-                //         qWarning() << "Error getting midi event data from buffer";
-                //     }
-                // }
+                m_juceMidiBuffer->clear();
+                void *midiInputPortBuffer = jack_port_get_buffer(m_jackClientMidiInPort, nframes);
+                for (jack_nframes_t midiEventIndex = 0; midiEventIndex < jack_midi_get_event_count(midiInputPortBuffer); ++midiEventIndex) {
+                    if (jack_midi_event_get(&m_midiEvent, midiInputPortBuffer, midiEventIndex) == 0) {
+                        juce::MidiMessage midiMessage = juce::MidiMessage(m_midiEvent.buffer, m_midiEvent.size);
+                        // qDebug() << "Adding midi event at index" << midiEventIndex << "data" << m_midiEvent.buffer;
+                        m_juceMidiBuffer->addEvent(midiMessage, static_cast<int>(midiEventIndex));
+                    } else {
+                        qWarning() << "Error getting midi event data from buffer";
+                    }
+                }
             }
-            if (m_pluginNumInputPorts == 1) {
-                jack_default_audio_sample_t *inputBuffers[1]{m_audioInLeftBuffer};
-                juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 1, static_cast<int>(nframes));
-                m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
-                auto *outLeftBuffer = audioBuffer.getReadPointer(0);
-                memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-            }
-            if (m_pluginNumInputPorts > 1) {
-                jack_default_audio_sample_t *inputBuffers[2]{m_audioInLeftBuffer, m_audioInRightBuffer};
-                juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
-                m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
-                auto *outLeftBuffer = audioBuffer.getReadPointer(0);
-                auto *outRightBuffer = audioBuffer.getReadPointer(1);
-                memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                memcpy(m_audioOutRightBuffer, outRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+
+            // Process input audio/midi events and write audio output to respective ports
+            if (m_pluginAcceptsMidi) {
+                // When working with synths, there are no jack input ports, hence no input buffers are available.
+                // processBlock expects buffers so that it can write audio data after processing. Hence create
+                // buffers as per the number of output ports and pass it to processBlock
+                if (m_pluginNumOutputPorts == 1) {
+                    float *leftBuffer;
+                    leftBuffer = static_cast<float *>(calloc(static_cast<size_t>(m_jackBufferSize), sizeof(float)));
+                    float *inputBuffers[1] = {leftBuffer};
+                    juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 1, static_cast<int>(nframes));
+                    m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
+                    auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                    memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                } else if (m_pluginNumOutputPorts > 1) {
+                    float *leftBuffer;
+                    float *rightBuffer;
+                    leftBuffer = static_cast<float *>(calloc(static_cast<size_t>(m_jackBufferSize), sizeof(float)));
+                    rightBuffer = static_cast<float *>(calloc(static_cast<size_t>(m_jackBufferSize), sizeof(float)));
+                    float *inputBuffers[2] = {leftBuffer, rightBuffer};
+                    juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
+                    m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
+                    auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                    auto *outRightBuffer = audioBuffer.getReadPointer(1);
+                    memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                    memcpy(m_audioOutRightBuffer, outRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                }
+            } else {
+                if (m_pluginNumInputPorts == 1) {
+                    jack_default_audio_sample_t *inputBuffers[1]{m_audioInLeftBuffer};
+                    juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 1, static_cast<int>(nframes));
+                    m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
+                    auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                    memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                } else if (m_pluginNumInputPorts > 1) {
+                    jack_default_audio_sample_t *inputBuffers[2]{m_audioInLeftBuffer, m_audioInRightBuffer};
+                    juce::AudioBuffer<float> audioBuffer = juce::AudioBuffer<float>(inputBuffers, 2, static_cast<int>(nframes));
+                    m_plugin->processBlock(audioBuffer, *m_juceMidiBuffer);
+                    auto *outLeftBuffer = audioBuffer.getReadPointer(0);
+                    auto *outRightBuffer = audioBuffer.getReadPointer(1);
+                    memcpy(m_audioOutLeftBuffer, outLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                    memcpy(m_audioOutRightBuffer, outRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                }
             }
         }
         return 0;
