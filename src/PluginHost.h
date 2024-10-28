@@ -28,4 +28,5 @@ public:
     Q_INVOKABLE virtual QList<PluginDescription*> getAllPlugins() = 0;
 private:
     PluginHostPrivate *d{nullptr};
+    static JuceEventLoop *juceEventLoop;
 };

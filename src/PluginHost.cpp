@@ -15,7 +15,6 @@ public:
         , m_pluginIdentifier(pluginIdentifier)
         , m_jackClientName(jackClientName)
         , m_juceMidiBuffer(new juce::MidiBuffer())
-        , m_juceEventLoop(new JuceEventLoop())
     {
         m_juceMidiBuffer->ensureSize(2048);
     }
@@ -36,7 +35,6 @@ public:
     jack_default_audio_sample_t *m_audioOutRightBuffer;
     juce::MidiBuffer *m_juceMidiBuffer{nullptr};
     jack_midi_event_t m_midiEvent;
-    JuceEventLoop *m_juceEventLoop{nullptr};
     bool m_pluginInstantiated{false};
     jack_nframes_t m_jackSampleRate;
     int m_jackBufferSize;
@@ -111,9 +109,6 @@ public:
                             ) {
                             qInfo() << "Port registration successful for client" << m_jackClientName;
                             if (jack_activate(m_jackClient) == 0) {
-                                if (!m_juceEventLoop->isThreadRunning()) {
-                                    m_juceEventLoop->start();
-                                }
                                 m_plugin->prepareToPlay(m_jackSampleRate, m_jackBufferSize);
                                 m_pluginInstantiated = true;
                                 result = true;
@@ -141,9 +136,6 @@ public:
 
     bool unloadPlugin() {
         bool result=false;
-        if (m_juceEventLoop->isThreadRunning()) {
-            m_juceEventLoop->stop();
-        }
         if (m_jackClient != nullptr) {
             jack_deactivate(m_jackClient);
             jack_client_close(m_jackClient);
@@ -239,10 +231,19 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     return obj->pluginProcessCallback(nframes);
 }
 
+JuceEventLoop *PluginHost::juceEventLoop{nullptr};
 PluginHost::PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent)
     : QObject(parent)
     , d(new PluginHostPrivate(this, pluginIdentifier, jackClientName))
-{}
+{
+    if (PluginHost::juceEventLoop == nullptr) {
+        qDebug() << "juceEventLoop not initialized. Initializing and starting event loop";
+        PluginHost::juceEventLoop = new JuceEventLoop();
+        PluginHost::juceEventLoop->start();
+    } else {
+        qDebug() << "juceEventLoop already initialized. Skipping";
+    }
+}
 
 PluginHost::~PluginHost()
 {
