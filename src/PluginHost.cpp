@@ -8,6 +8,35 @@
 
 static int jackProcessCallback(jack_nframes_t nframes, void* arg);
 
+class JucyPlayHead : public juce::AudioPlayHead {
+public:
+    virtual juce::Optional<juce::AudioPlayHead::PositionInfo> getPosition() const override
+    {
+        juce::AudioPlayHead::PositionInfo currentPosition;
+        currentPosition.setIsPlaying(true);
+        currentPosition.setIsRecording(false);
+        currentPosition.setIsLooping(false);
+        // currentPosition.setEditOriginTime(transport.getTimeWhenStarted());
+
+        currentPosition.setTimeInSamples(int64_t(position.usecs * sampleRate));
+        currentPosition.setTimeInSeconds(position.usecs * 1000000.0);
+
+        currentPosition.setBpm(position.beats_per_minute);
+        juce::AudioPlayHead::TimeSignature signature;
+        signature.numerator = position.ticks_per_beat;
+        signature.denominator = position.beat_type;
+        currentPosition.setTimeSignature(signature);
+
+        currentPosition.setPpqPositionOfLastBarStart(position.bar_start_tick);
+        currentPosition.setPpqPosition((((position.bar * position.beat_type) + position.beat) * position.ticks_per_beat) + position.tick);
+
+        return currentPosition;
+    }
+    jack_transport_state_t transportState;
+    jack_position_t position;
+    uint64_t sampleRate{48000};
+};
+
 class PluginHostPrivate {
 public:
     PluginHostPrivate(PluginHost *pluginHost, QString pluginIdentifier, QString jackClientName)
@@ -28,6 +57,7 @@ public:
     jack_port_t **m_jackAudioOutputPorts{nullptr};
     jack_port_t *m_jackMidiInputPort{nullptr};
     jack_default_audio_sample_t **m_audioBuffers{nullptr};
+    JucyPlayHead m_playhead;
     juce::AudioBuffer<jack_default_audio_sample_t> *m_juceAudioBuffer{nullptr};
     juce::MidiBuffer *m_juceMidiBuffer{nullptr};
     jack_midi_event_t m_midiEvent;
@@ -142,6 +172,8 @@ public:
                         if (registerJackPorts()) {
                             qInfo() << "Port registration successful for client" << m_jackClientName;
                             if (jack_activate(m_jackClient) == 0) {
+                                m_playhead.sampleRate = m_jackSampleRate;
+                                m_plugin->setPlayHead(&m_playhead);
                                 m_plugin->prepareToPlay(m_jackSampleRate, m_jackBufferSize);
                                 m_pluginInstantiated = true;
                                 result = true;
@@ -186,6 +218,7 @@ public:
 
     int pluginProcessCallback(jack_nframes_t nframes) {
         if (m_plugin != nullptr && m_pluginInstantiated) {
+            m_playhead.transportState = jack_transport_query(m_jackClient, &m_playhead.position);
             if (m_pluginAcceptsMidi) {
                 // Populate juce midi buffer to send to processBlock
                 m_juceMidiBuffer->clear();
@@ -206,14 +239,13 @@ public:
                     jack_default_audio_sample_t *audioBuffer = m_juceAudioBuffer->getWritePointer(bufferIndex);
                     memset(audioBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
                 }
-            } else {
-                // Populate audio buffers to send to processBlock
-                for (int portIndex = 0; portIndex < m_pluginNumInputPorts; ++portIndex) {
-                    if (m_jackAudioInputPorts[portIndex] != nullptr) {
-                        jack_default_audio_sample_t *portBuffer = static_cast<jack_default_audio_sample_t *>(jack_port_get_buffer(m_jackAudioInputPorts[portIndex], nframes));
-                        jack_default_audio_sample_t *audioBuffer = m_juceAudioBuffer->getWritePointer(portIndex);
-                        memcpy(audioBuffer, portBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                    }
+            }
+            // Populate audio buffers to send to processBlock
+            for (int portIndex = 0; portIndex < m_pluginNumInputPorts; ++portIndex) {
+                if (m_jackAudioInputPorts[portIndex] != nullptr) {
+                    jack_default_audio_sample_t *portBuffer = static_cast<jack_default_audio_sample_t *>(jack_port_get_buffer(m_jackAudioInputPorts[portIndex], nframes));
+                    jack_default_audio_sample_t *audioBuffer = m_juceAudioBuffer->getWritePointer(portIndex);
+                    memcpy(audioBuffer, portBuffer, nframes * sizeof(jack_default_audio_sample_t));
                 }
             }
             // Send the audio and midi data to plugin to process
