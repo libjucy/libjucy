@@ -18,8 +18,9 @@ public:
         currentPosition.setIsLooping(false);
         // currentPosition.setEditOriginTime(transport.getTimeWhenStarted());
 
-        currentPosition.setTimeInSamples(int64_t(position.usecs * sampleRate));
-        currentPosition.setTimeInSeconds(position.usecs * 1000000.0);
+        const double timeInSeconds{position.usecs / 1000000.0};
+        currentPosition.setTimeInSamples(int64_t(timeInSeconds * sampleRate));
+        currentPosition.setTimeInSeconds(timeInSeconds / 1000000.0);
 
         currentPosition.setBpm(position.beats_per_minute);
         juce::AudioPlayHead::TimeSignature signature;
