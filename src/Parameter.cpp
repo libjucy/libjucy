@@ -5,6 +5,18 @@ Parameter::Parameter(juce::AudioProcessorParameter *juceParameter, QObject *pare
     , m_juceParameter(juceParameter)
 {}
 
+QString Parameter::getParameterID()
+{
+    QString result = "";
+    if (m_juceParameter != nullptr) {
+        juce::AudioProcessorParameterWithID *parameterWithId = static_cast<juce::AudioProcessorParameterWithID*>(m_juceParameter);
+        if (parameterWithId) {
+            result = QString::fromStdString(parameterWithId->getParameterID().toStdString());
+        }
+    }
+    return result;
+}
+
 QString Parameter::getName()
 {
     QString result = "";
@@ -61,4 +73,14 @@ void Parameter::decrease()
     if (m_juceParameter != nullptr) {
         m_juceParameter->setValue(qBound(0.0, getValue() - 1.0/(numSteps() - 1), 1.0));
     }
+}
+
+bool Parameter::isBypassParameter() const
+{
+    return m_isBypassParameter;
+}
+
+bool Parameter::isProgramParameter() const
+{
+    return m_isProgramParameter;
 }

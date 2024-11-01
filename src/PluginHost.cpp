@@ -327,19 +327,29 @@ QList<Parameter *> PluginHost::getAllParameters()
     QList<Parameter *> parameters;
     if (d->m_plugin != nullptr) {
         d->m_plugin->refreshParameterList();
-        for (auto *juceParameter : d->m_plugin->getParameters()) {
+        const auto parameterList = d->m_plugin->getParameters();
+        static const juce::String programParameterName{"Program"};
+        static const int numberOfPrograms{d->m_plugin->getNumPrograms()};
+        for (auto *juceParameter : parameterList) {
+            Parameter *parameter{nullptr};
             if (juceParameter->getAllValueStrings().size() > 0) {
                 // Test for String Parameter
-                StringParameter *parameter = new StringParameter(juceParameter, this);
+                parameter = new StringParameter(juceParameter, this);
                 parameters << parameter;
             } else if (juceParameter->getNumSteps() == 2) {
                 // Test for boolean parameter
-                BooleanParameter *parameter = new BooleanParameter(juceParameter, this);
+                parameter = new BooleanParameter(juceParameter, this);
                 parameters << parameter;
             } else {
                 // If all tests fails, make it a generic parameter
-                Parameter *parameter = new Parameter(juceParameter, this);
+                parameter = new Parameter(juceParameter, this);
                 parameters << parameter;
+            }
+            if (juceParameter == d->m_plugin->getBypassParameter()) {
+                parameter->m_isBypassParameter = true;
+            } else if (numberOfPrograms > 0 && juceParameter->getParameterIndex() == parameterList.size() - 1 && juceParameter->getName(INT_MAX) == programParameterName) {
+                // dirty heuristic, but... it matches the logic in the vst3 plugin code
+                parameter->m_isProgramParameter = true;
             }
         }
     }
