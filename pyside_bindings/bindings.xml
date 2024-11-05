@@ -10,7 +10,7 @@
     </object-type>
     <object-type name="Parameter">
     </object-type>
-    <object-type name="StringParameter">
+    <object-type name="StringListParameter">
     </object-type>
     <object-type name="BooleanParameter">
     </object-type>

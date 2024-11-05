@@ -8,7 +8,7 @@ target_sources(jucy
         LV2PluginHost.cpp
         VST3PluginHost.cpp
         Parameter.cpp
-        StringParameter.cpp
+        StringListParameter.cpp
         BooleanParameter.cpp
         PluginDescription.h
 )

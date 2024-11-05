@@ -24,3 +24,13 @@ void BooleanParameter::decrease()
 {
     m_juceParameter->setValue(0.0);
 }
+
+BooleanParameter *BooleanParameter::from(juce::AudioProcessorParameter *juceParameter, QObject *parent)
+{
+    BooleanParameter *parameter{nullptr};
+    // Heuristics to check if a juce parameter needs to be treated as a Boolean parameter
+    if (juceParameter->getNumSteps() == 2) {
+        parameter = new BooleanParameter(juceParameter, parent);
+    }
+    return parameter;
+}

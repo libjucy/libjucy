@@ -1,5 +1,5 @@
 #include "PluginHost.h"
-#include "StringParameter.h"
+#include "StringListParameter.h"
 #include "BooleanParameter.h"
 #include <QtCore>
 #include <QDebug>
@@ -332,13 +332,11 @@ QList<Parameter *> PluginHost::getAllParameters()
         static const int numberOfPrograms{d->m_plugin->getNumPrograms()};
         for (auto *juceParameter : parameterList) {
             Parameter *parameter{nullptr};
-            if (juceParameter->getAllValueStrings().size() > 0) {
-                // Test for String Parameter
-                parameter = new StringParameter(juceParameter, this);
+            if (parameter = StringListParameter::from(juceParameter, this); parameter != nullptr) {
+                // Test for String Parameter succeeded
                 parameters << parameter;
-            } else if (juceParameter->getNumSteps() == 2) {
-                // Test for boolean parameter
-                parameter = new BooleanParameter(juceParameter, this);
+            } else if (parameter = BooleanParameter::from(juceParameter, this); parameter != nullptr) {
+                // Test for boolean parameter succeeded
                 parameters << parameter;
             } else {
                 // If all tests fails, make it a generic parameter
