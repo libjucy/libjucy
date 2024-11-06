@@ -24,7 +24,7 @@ public:
 
         currentPosition.setBpm(position.beats_per_minute);
         juce::AudioPlayHead::TimeSignature signature;
-        signature.numerator = position.ticks_per_beat;
+        signature.numerator = position.beats_per_bar;
         signature.denominator = position.beat_type;
         currentPosition.setTimeSignature(signature);
 
