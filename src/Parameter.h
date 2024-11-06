@@ -6,12 +6,13 @@
 class Parameter : public QObject {
 public:
     explicit Parameter(juce::AudioProcessorParameter *juceParameter, QObject *parent = nullptr);
-    QString getParameterID();
-    QString getName();
-    float getDefaultValue();
-    float getValue();
+    QString getParameterID() const;
+    QString getName() const;
+    float getDefaultValue() const;
+    float getValue() const;
     void setValue(float value);
-    int numSteps();
+    QString getValueLabel() const;
+    int numSteps() const;
     virtual bool isBoolean();
     virtual bool isString();
     virtual void increase();

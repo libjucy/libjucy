@@ -5,7 +5,7 @@ Parameter::Parameter(juce::AudioProcessorParameter *juceParameter, QObject *pare
     , m_juceParameter(juceParameter)
 {}
 
-QString Parameter::getParameterID()
+QString Parameter::getParameterID() const
 {
     QString result = "";
     if (m_juceParameter != nullptr) {
@@ -17,7 +17,7 @@ QString Parameter::getParameterID()
     return result;
 }
 
-QString Parameter::getName()
+QString Parameter::getName() const
 {
     QString result = "";
     if (m_juceParameter != nullptr) {
@@ -26,7 +26,7 @@ QString Parameter::getName()
     return result;
 }
 
-float Parameter::getDefaultValue()
+float Parameter::getDefaultValue() const
 {
     float result = 0.0f;
     if (m_juceParameter != nullptr) {
@@ -35,7 +35,7 @@ float Parameter::getDefaultValue()
     return result;
 }
 
-float Parameter::getValue()
+float Parameter::getValue() const
 {
     float result = -1.0f;
     if (m_juceParameter != nullptr) {
@@ -51,7 +51,16 @@ void Parameter::setValue(float value)
     }
 }
 
-int Parameter::numSteps()
+QString Parameter::getValueLabel() const
+{
+    QString result;
+    if (m_juceParameter != nullptr) {
+        result = QString::fromStdString(m_juceParameter->getCurrentValueAsText().toStdString());
+    }
+    return result;
+}
+
+int Parameter::numSteps() const
 {
     int result = 0;
     if (m_juceParameter != nullptr) {
