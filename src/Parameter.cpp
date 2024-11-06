@@ -26,6 +26,15 @@ QString Parameter::getName()
     return result;
 }
 
+float Parameter::getDefaultValue()
+{
+    float result = 0.0f;
+    if (m_juceParameter != nullptr) {
+        result = m_juceParameter->getDefaultValue();
+    }
+    return result;
+}
+
 float Parameter::getValue()
 {
     float result = -1.0f;

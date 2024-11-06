@@ -8,6 +8,7 @@ public:
     explicit Parameter(juce::AudioProcessorParameter *juceParameter, QObject *parent = nullptr);
     QString getParameterID();
     QString getName();
+    float getDefaultValue();
     float getValue();
     void setValue(float value);
     int numSteps();
