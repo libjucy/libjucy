@@ -69,16 +69,6 @@ int Parameter::numSteps() const
     return result;
 }
 
-bool Parameter::isBoolean()
-{
-    return false;
-}
-
-bool Parameter::isString()
-{
-    return false;
-}
-
 void Parameter::increase()
 {
     if (m_juceParameter != nullptr) {

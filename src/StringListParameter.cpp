@@ -42,16 +42,6 @@ QStringList StringListParameter::getAllValueStrings()
     return result;
 }
 
-bool StringListParameter::isBoolean()
-{
-    return false;
-}
-
-bool StringListParameter::isString()
-{
-    return true;
-}
-
 StringListParameter *StringListParameter::from(juce::AudioProcessorParameter *juceParameter, QObject *parent)
 {
     StringListParameter *parameter{nullptr};

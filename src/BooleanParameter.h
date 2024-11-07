@@ -7,8 +7,6 @@
 class BooleanParameter : public Parameter {
     Q_OBJECT
 public:
-    bool isBoolean() override;
-    bool isString() override;
     void increase() override;
     void decrease() override;
     static BooleanParameter *from(juce::AudioProcessorParameter *juceParameter, QObject *parent = nullptr);

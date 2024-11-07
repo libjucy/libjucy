@@ -11,10 +11,8 @@ public:
     float getDefaultValue() const;
     float getValue() const;
     void setValue(float value);
-    QString getValueLabel() const;
+    virtual QString getValueLabel() const;
     int numSteps() const;
-    virtual bool isBoolean();
-    virtual bool isString();
     virtual void increase();
     virtual void decrease();
     bool isBypassParameter() const;

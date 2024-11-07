@@ -5,16 +5,6 @@ BooleanParameter::BooleanParameter(juce::AudioProcessorParameter *juceParameter,
     , m_juceParameter(juceParameter)
 {}
 
-bool BooleanParameter::isBoolean()
-{
-    return true;
-}
-
-bool BooleanParameter::isString()
-{
-    return false;
-}
-
 void BooleanParameter::increase()
 {
     m_juceParameter->setValue(1.0);
