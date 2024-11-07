@@ -34,11 +34,8 @@ QStringList StringListParameter::getAllValueStrings()
                 result << QString::fromStdString(value.toStdString());
             }
         } else {
-            float value = 0.0f;
-            const float delta = 1.0 / (numSteps() - 1);
-            while (value <= 1.0f) {
+            for (auto value : getAllValues()) {
                 result << QString::fromStdString(m_juceParameter->getText(value, INT_MAX).toStdString());
-                value += delta;
             }
         }
     }
