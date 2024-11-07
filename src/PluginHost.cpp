@@ -1,6 +1,7 @@
 #include "PluginHost.h"
 #include "StringListParameter.h"
 #include "BooleanParameter.h"
+#include "IntegerParameter.h"
 #include <QtCore>
 #include <QDebug>
 #include <jack/jack.h>
@@ -337,6 +338,9 @@ QList<Parameter *> PluginHost::getAllParameters()
                 parameters << parameter;
             } else if (parameter = BooleanParameter::from(juceParameter, this); parameter != nullptr) {
                 // Test for boolean parameter succeeded
+                parameters << parameter;
+            } else if (parameter = IntegerParameter::from(juceParameter, this); parameter != nullptr) {
+                // Test for Integer Parameter succeeded
                 parameters << parameter;
             } else {
                 // If all tests fails, make it a generic parameter

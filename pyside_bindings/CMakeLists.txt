@@ -8,6 +8,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/parameter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/stringlistparameter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/booleanparameter_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/integerparameter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugindescription_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jucy_module_wrapper.cpp
 )
