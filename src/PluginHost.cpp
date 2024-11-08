@@ -1,4 +1,5 @@
 #include "PluginHost.h"
+#include "JuceEventLoop.h"
 #include "StringListParameter.h"
 #include "BooleanParameter.h"
 #include "IntegerParameter.h"
@@ -268,23 +269,24 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     return obj->pluginProcessCallback(nframes);
 }
 
-JuceEventLoop *PluginHost::juceEventLoop{nullptr};
+static JuceEventLoop *jucyJuceEventLoop{nullptr};
 PluginHost::PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent)
     : QObject(parent)
     , d(new PluginHostPrivate(this, pluginIdentifier, jackClientName))
 {
-    if (PluginHost::juceEventLoop == nullptr) {
-        qDebug() << "juceEventLoop not initialized. Initializing and starting event loop";
-        PluginHost::juceEventLoop = new JuceEventLoop();
-        PluginHost::juceEventLoop->start();
+    if (jucyJuceEventLoop == nullptr) {
+        qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop not instantiated - creating instance before starting the event loop";
+        jucyJuceEventLoop = new JuceEventLoop();
     } else {
-        qDebug() << "juceEventLoop already initialized. Skipping";
+        qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop already instantiated - just asking to start the event loop";
     }
+    jucyJuceEventLoop->start();
 }
 
 PluginHost::~PluginHost()
 {
     unloadPlugin();
+    jucyJuceEventLoop->stop();
     delete d;
 }
 

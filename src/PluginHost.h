@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JuceHeaders.h"
-#include "JuceEventLoop.h"
 #include "Parameter.h"
 #include "PluginDescription.h"
 #include <QtCore>
@@ -28,5 +27,4 @@ public:
     Q_INVOKABLE virtual QList<PluginDescription*> getAllPlugins() = 0;
 private:
     PluginHostPrivate *d{nullptr};
-    static JuceEventLoop *juceEventLoop;
 };
