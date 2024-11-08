@@ -8,6 +8,7 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 
+static JuceEventLoop *jucyJuceEventLoop{nullptr};
 static int jackProcessCallback(jack_nframes_t nframes, void* arg);
 
 class JucyPlayHead : public juce::AudioPlayHead {
@@ -48,6 +49,12 @@ public:
         , m_jackClientName(jackClientName)
         , m_juceMidiBuffer(new juce::MidiBuffer())
     {
+        if (jucyJuceEventLoop == nullptr) {
+            qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop not instantiated - creating instance before starting the event loop";
+            jucyJuceEventLoop = new JuceEventLoop();
+        } else {
+            qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop already instantiated - just asking to start the event loop";
+        }
         m_juceMidiBuffer->ensureSize(2048);
     }
 
@@ -141,6 +148,7 @@ public:
     }
 
     bool loadPlugin(juce::AudioPluginFormatManager *pluginFormatManager) {
+        jucyJuceEventLoop->start();
         juce::OwnedArray<juce::PluginDescription> discoveredPlugins;
         juce::PluginDescription pluginDescription;
         juce::String err;
@@ -216,6 +224,7 @@ public:
             m_pluginInstantiated = false;
             result=true;
         }
+        jucyJuceEventLoop->stop();
         return result;
     }
 
@@ -269,24 +278,15 @@ static int jackProcessCallback(jack_nframes_t nframes, void* arg) {
     return obj->pluginProcessCallback(nframes);
 }
 
-static JuceEventLoop *jucyJuceEventLoop{nullptr};
 PluginHost::PluginHost(QString pluginIdentifier, QString jackClientName, QObject *parent)
     : QObject(parent)
     , d(new PluginHostPrivate(this, pluginIdentifier, jackClientName))
 {
-    if (jucyJuceEventLoop == nullptr) {
-        qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop not instantiated - creating instance before starting the event loop";
-        jucyJuceEventLoop = new JuceEventLoop();
-    } else {
-        qDebug() << Q_FUNC_INFO << "jucyJuceEventLoop already instantiated - just asking to start the event loop";
-    }
-    jucyJuceEventLoop->start();
 }
 
 PluginHost::~PluginHost()
 {
     unloadPlugin();
-    jucyJuceEventLoop->stop();
     delete d;
 }
 
