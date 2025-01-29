@@ -13,3 +13,4 @@ jucy.creator.user
 jucy.cxxflags
 jucy.files
 jucy.includes
+.qtc_clangd
